@@ -1,9 +1,8 @@
 ! Copyright (C) 2011 PolyMicro Systems.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors alien alien.accessors alien.c-types alien.data
-alien.libraries alien.syntax combinators destructors io kernel
-literals locals math math.parser prettyprint tools.continuations
-unix.types ;
+USING: accessors alien alien.c-types alien.data alien.libraries
+alien.syntax combinators davec destructors file.security kernel
+literals locals math tools.continuations unix.ffi unix.types ;
 
 << "libc" "/usr/lib/libc.dylib" cdecl add-library >>
 
@@ -159,10 +158,12 @@ FUNCTION: acl_t acl_from_text ( c-string buf_p ) ;
 FUNCTION: ssize_t acl_size ( acl_t acl ) ;
 FUNCTION: char* acl_to_text ( acl_t acl, ssize_t* len_p ) ;
 
+<<
 CONSTANT: ROPERMS $[ ACL_READ_DATA
                      ACL_READ_SECURITY or
                      ACL_READ_ATTRIBUTES or
                      ACL_READ_EXTATTRIBUTES or ]
+>>
 
 TUPLE: ACL < disposable acl ace perms tag qualifer error ;
 
@@ -232,23 +233,61 @@ TUPLE: ACL < disposable acl ace perms tag qualifer error ;
     perms>>
     acl_set_permset ;
 
-: dm ( adr count -- )
-    [ dup alien-address >hex write " " write
-      16 [ dup 1 alien-unsigned-1  >hex write " " write
-             alien-address 1 + <alien> ] times
-      "" print
-    ] times
-    drop ;
+! int
+! main(void)
+! {
+!     int result;
+!     long retval;
+!     uuid_t *uuid=NULL;
+
+!     /* check to see if ACLs are supported in the current directory*/
+!     if (-1 == (retval = pathconf(".", _PC_EXTENDED_SECURITY_NP))) {
+!         err(1, "pathconf()");
+!     } else {
+!         if(0 == retval) {
+!             fprintf(stderr,
+!                 "ACLs not supported here (retval=%ld)\n",
+!                 retval);
+!             exit(1);
+!         }
+!     }
+
+
+!     if (NULL == (uuid = (uuid_t *)calloc(1,sizeof(uuid_t))))
+!         err(1, "unable to allocate a uuid");
+
+!     if (0 != mbr_uid_to_uuid(getuid(), *uuid)) {
+!         perror("mbr_uid_to_uuid()");
+!         free(uuid);
+!         exit(1);
+!     }
+
+!     result = acl_readonly_example(uuid);
+!     free(uuid);
+
+!     printf("result=%d\n", result);
+!     return(result);
+! }
+
+: acl-get-uuid ( -- uuid )
+    getuid
+    uuid_t make-c-array
+    [ mbr_uid_to_uuid ] keep swap
+    [ ]
+    [ throw ] 
+    ; 
 
 : acl_readonly_example ( -- ACL )
     <ACL>
     [ ACL_EXTENDED_ALLOW set-tag-type ] keep nip
-    ! [ 1 set-qualifer ] keep nip
+    [ acl-get-uuid set-qualifer ] keep nip
     [ get-permset ] keep nip
     [ clear-permset ] keep nip
     [ break 0x820a add-permset ] keep nip
     [ perms>> 1 dm ] keep 
     [ set-permset ] keep nip
- ;
+    ;
 
 ! if (0 != mbr_uid_to_uuid(getuid(), *uuid)) {
+
+
